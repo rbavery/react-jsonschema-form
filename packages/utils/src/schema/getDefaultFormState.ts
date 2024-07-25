@@ -3,6 +3,7 @@ import isEmpty from 'lodash/isEmpty';
 
 import {
   ANY_OF_KEY,
+  CONST_KEY,
   DEFAULT_KEY,
   DEPENDENCIES_KEY,
   PROPERTIES_KEY,
@@ -100,8 +101,13 @@ function maybeAddDefaultToObject<T = any>(
   includeUndefinedValues: boolean | 'excludeObjectChildren',
   isParentRequired?: boolean,
   requiredFields: string[] = [],
-  experimental_defaultFormStateBehavior: Experimental_DefaultFormStateBehavior = {}
+  experimental_defaultFormStateBehavior: Experimental_DefaultFormStateBehavior = {},
+  constantValue?: T
 ) {
+  if (constantValue !== undefined) {
+    obj[key] = constantValue;
+    return;
+  }
   const { emptyObjectFields = 'populateAllDefaults' } = experimental_defaultFormStateBehavior;
   if (includeUndefinedValues) {
     obj[key] = computedDefault;
@@ -142,6 +148,7 @@ function maybeAddDefaultToObject<T = any>(
 
 interface ComputeDefaultsProps<T = any, S extends StrictRJSFSchema = RJSFSchema> {
   parentDefaults?: T;
+  parentConsts?: T;
   rootSchema?: S;
   rawFormData?: T;
   includeUndefinedValues?: boolean | 'excludeObjectChildren';
@@ -157,6 +164,7 @@ interface ComputeDefaultsProps<T = any, S extends StrictRJSFSchema = RJSFSchema>
  * @param rawSchema - The schema for which the default state is desired
  * @param [props] - Optional props for this function
  * @param [props.parentDefaults] - Any defaults provided by the parent field in the schema
+ * @param [props.parentConsts] - Any constants provided by the parent field in the schema
  * @param [props.rootSchema] - The options root schema, used to primarily to look up `$ref`s
  * @param [props.rawFormData] - The current formData, if any, onto which to provide any missing defaults
  * @param [props.includeUndefinedValues=false] - Optional flag, if true, cause undefined values to be added as defaults.
@@ -172,6 +180,7 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
   rawSchema: S,
   {
     parentDefaults,
+    parentConsts,
     rawFormData,
     rootSchema = {} as S,
     includeUndefinedValues = false,
@@ -184,6 +193,7 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
   const schema: S = isObject(rawSchema) ? rawSchema : ({} as S);
   // Compute the defaults recursively: give highest priority to deepest nodes.
   let defaults: T | T[] | undefined = parentDefaults;
+  let consts: T | T[] | undefined = parentConsts;
   // If we get a new schema, then we need to recompute defaults again for the new schema found.
   let schemaToCompute: S | null = null;
   let updatedRecurseList = _recurseList;
@@ -194,7 +204,12 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
     defaults = mergeObjects(defaults!, schema.default as GenericObjectType) as T;
   } else if (DEFAULT_KEY in schema) {
     defaults = schema.default as unknown as T;
-  } else if (REF_KEY in schema) {
+  }
+  if (CONST_KEY in schema) {
+    consts = schema.const as unknown as T;
+  }
+
+  if (REF_KEY in schema) {
     const refName = schema[REF_KEY];
     // Use referenced schema defaults for this node.
     if (!_recurseList.includes(refName!)) {
@@ -212,6 +227,7 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
         _recurseList,
         experimental_defaultFormStateBehavior,
         parentDefaults: Array.isArray(parentDefaults) ? parentDefaults[idx] : undefined,
+        parentConsts: Array.isArray(parentConsts) ? parentConsts[idx] : undefined,
         rawFormData: formData as T,
         required,
       })
@@ -259,6 +275,7 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
       _recurseList: updatedRecurseList,
       experimental_defaultFormStateBehavior,
       parentDefaults: defaults as T | undefined,
+      parentConsts: consts as T | undefined,
       rawFormData: formData as T,
       required,
     });
@@ -298,7 +315,8 @@ export function computeDefaults<T = any, S extends StrictRJSFSchema = RJSFSchema
             includeUndefinedValues,
             required,
             retrievedSchema.required,
-            experimental_defaultFormStateBehavior
+            experimental_defaultFormStateBehavior,
+            get(consts, [key])
           );
           return acc;
         },

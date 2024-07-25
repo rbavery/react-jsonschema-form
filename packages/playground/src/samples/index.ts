@@ -31,6 +31,7 @@ import defaults from './defaults';
 import options from './options';
 import ifThenElse from './ifThenElse';
 import customField from './customField';
+import constField from './constField';
 import { Sample } from './Sample';
 import deepFreeze from 'deep-freeze-es6';
 
@@ -69,6 +70,7 @@ const _samples: Record<string, Sample> = {
   ErrorSchema: errorSchema,
   Defaults: defaults,
   'Custom Field': customField,
+  'Const Field': constField,
 };
 
 export const samples = deepFreeze(_samples);
